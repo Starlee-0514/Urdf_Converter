@@ -84,8 +84,36 @@ with open(proto_Filename, 'r', encoding='utf-8') as file:
 with open(proto_Filename, 'w', encoding='utf-8') as file:
     file.writelines(datas)
 
-# ================== Solid Reference ==================
+# ================== 載入 Proto Robot ==================
 proto_bot = proto.proto_robot(proto_filename = proto_Filename)
+
+# ================== 自動替換 Collision Mesh ==================
+# 利用您的 parser 遍歷樹狀結構，找到 boundingObject
+print("--- 開始替換物理碰撞模型 ---")
+# 1. 搜尋所有 boundingObject
+bounding_objects = proto_bot.search("boundingObject")
+
+for bo in bounding_objects:
+    # 2. 在 boundingObject 裡面找 Mesh 節點
+    meshes = bo.search("Mesh")
+    for mesh_node in meshes:
+        # 3. 找到 Mesh 裡面的 url 屬性
+        url_props = mesh_node.search("url")
+        if url_props:
+            url_prop = url_props[0] # 取得 url property 物件
+            original_url = url_prop.content
+            
+            # 檢查字串中是否包含 .stl (且不是已經替換過的)
+            if ".stl" in original_url and "_collision.stl" not in original_url:
+                # 嘗試建構 collision 檔名
+                collision_url = original_url.replace(".stl", "_collision.stl")
+                
+                # 這裡做個簡單檢查：雖然我們剛才生成了檔案，但要確保 URL 路徑對應
+                # 簡單作法：直接替換字串，因為我們確定檔案一定在 stl_tool 步驟生成了
+                url_prop.content = collision_url
+                print(f"Updated Collision: {os.path.basename(original_url)} -> {os.path.basename(collision_url)}")
+
+# ================== Solid Reference ==================
 l = proto_bot.search("endPoint")
 
 # search empty solid and remove some properties
