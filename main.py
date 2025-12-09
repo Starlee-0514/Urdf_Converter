@@ -6,6 +6,7 @@ import os
 import json
 import shutil
 import proto_praser as proto
+import stl_tool
 
 Folder_Object = {'Dir': {}, 'File': []}
 
@@ -45,10 +46,14 @@ output_path = askdirectory() # show an "Open" dialog box and return the path to 
 
 # setup mesh file and texture to relative path with the output_path
 try:
-    # Copy the mesh_path folder and its contents to the output_path
-    shutil.copytree(mesh_path, os.path.join(output_path, "meshes_"+folder_name))
+# Copy the mesh_path folder and its contents to the output_path
+    target_mesh_dir = os.path.join(output_path, "meshes_"+folder_name)
+    shutil.copytree(mesh_path, target_mesh_dir)
     # Copy the texture_path folder and its contents to the output_path
     shutil.copytree(texture_path, os.path.join(output_path, "textures_"+folder_name))
+    
+    # NEW: 在複製完檔案後，立刻對目標資料夾執行減面
+    stl_tool.generate_collision_meshes(target_mesh_dir, target_faces=500)
 except Exception as e:
     print(e)
 
