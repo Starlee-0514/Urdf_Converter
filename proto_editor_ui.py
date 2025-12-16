@@ -214,9 +214,18 @@ class ProtoEditorUI:
             self.status_bar.config(text="Error loading file")
             
     def populate_tree(self):
-        """Populate tree view with proto structure"""
-        # Clear existing tree
+        """Populate tree with proto robot structure"""
+        # Save expanded state before clearing
+        expanded_items = set()
+        def save_expanded_state(item):
+            if self.tree.item(item, 'open'):
+                # Store the text label as identifier
+                expanded_items.add(self.tree.item(item, 'text'))
+            for child in self.tree.get_children(item):
+                save_expanded_state(child)
+        
         for item in self.tree.get_children():
+            save_expanded_state(item)
             self.tree.delete(item)
             
         if not self.proto_robot:
@@ -228,10 +237,13 @@ class ProtoEditorUI:
                                    open=True)
         
         # Add children recursively
-        self.add_tree_children(root_id, self.proto_robot.children)
+        self.add_tree_children(root_id, self.proto_robot.children, expanded_items)
         
-    def add_tree_children(self, parent_id, children):
+    def add_tree_children(self, parent_id, children, expanded_items=None):
         """Recursively add children to tree - Unity-like filtering"""
+        if expanded_items is None:
+            expanded_items = set()
+        
         for child in children:
             # Skip property items (only show in inspector)
             if isinstance(child, proto.property):
@@ -299,7 +311,7 @@ class ProtoEditorUI:
                 # Containers like children[], endPoint[], device[] - hide them and show their children directly
                 if has_children:
                     # Process container's children directly under parent (skip the container itself)
-                    self.add_tree_children(parent_id, child.children)
+                    self.add_tree_children(parent_id, child.children, expanded_items)
                 continue
             
             # Special handling: skip endPoint, Shape, physics, jointParameters, Motor, Sensor nodes
@@ -308,19 +320,22 @@ class ProtoEditorUI:
                'Motor' in node_name_to_check or 'Sensor' in node_name_to_check:
                 # Don't display these nodes, but process endPoint's children
                 if node_name_to_check == 'endPoint' and hasattr(child, 'children'):
-                    self.add_tree_children(parent_id, child.children)
+                    self.add_tree_children(parent_id, child.children, expanded_items)
                 # Others are hidden entirely (properties shown in inspector)
                 continue
             
             # Only insert if should be displayed
             if should_display:
+                # Check if this item was previously expanded
+                is_expanded = label in expanded_items
+                
                 item_id = self.tree.insert(parent_id, 'end', text=label,
                                           values=(type_name, id(child)),
-                                          open=False)
+                                          open=is_expanded)
                 
                 # Add children recursively if any
                 if has_children:
-                    self.add_tree_children(item_id, child.children)
+                    self.add_tree_children(item_id, child.children, expanded_items)
                 
     def on_tree_select(self, event):
         """Handle tree item selection"""
