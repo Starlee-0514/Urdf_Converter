@@ -1,24 +1,43 @@
 from urdf2webots.importer import convertUrdfFile
-from tkinter import Tk     # from tkinter import Tk for Python 3.x
-from tkinter.filedialog import askopenfilename
-from tkinter.filedialog import askdirectory
 import os
 import json
 import shutil
+import subprocess
 import proto_praser as proto
 import stl_tool
 
-Folder_Object = {'Dir': {}, 'File': []}
+def zenity_select_folder(title="Select Folder"):
+    """Use Zenity to select a folder"""
+    try:
+        result = subprocess.run(
+            ['zenity', '--file-selection', '--directory', '--title', title],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        print("Selection cancelled")
+        return None
+    except FileNotFoundError:
+        print("Zenity not found. Please install: sudo apt-get install zenity")
+        return None
 
+Folder_Object = {'Dir': {}, 'File': []}
+    
 # ================== File Browser ==================
-Tk().withdraw() # we don't want a full GUI, so keep the root window from appearing
-input_path = askdirectory() # show an "Open" dialog box and return the path to the selected file
-folder_name = input_path.split(r"/")[-1] # get the file name
+input_path = zenity_select_folder("Select Input Folder")
+
+if not input_path:
+    print("No folder selected. Exiting.")
+    exit(1)
+
+folder_name = input_path.split(r"/")[-1]
 print("Selected Folder: ", folder_name)
 
 # lookup all the files and folders in the input_path
 for root, dirs, files in os.walk(input_path):
-    rt = os.path.relpath(root, input_path)
+    rt = os.path.relpath(root, input_path)      # get the relative path from input_path
     if rt == '.':   # if the root is the input_path
         rt = ''
         for d in dirs:
@@ -42,7 +61,14 @@ Urdf_File = os.path.join(input_path, "urdf", file_name ).replace("\\", "/")     
 mesh_path = os.path.join(input_path, "meshes").replace("\\", "/")                           # get the mesh path
 texture_path = os.path.join(input_path, "textures").replace("\\", "/")                      # get the texture path
 
-output_path = askdirectory() # show an "Open" dialog box and return the path to the selected file
+print("Select Output Folder: ")
+output_path = zenity_select_folder("Select Output Folder")
+
+if not output_path:
+    print("No output folder selected. Exiting.")
+    exit(1)
+
+print("Selected Output Folder: ", output_path)
 
 # setup mesh file and texture to relative path with the output_path
 try:
@@ -87,31 +113,85 @@ with open(proto_Filename, 'w', encoding='utf-8') as file:
 # ================== 載入 Proto Robot ==================
 proto_bot = proto.proto_robot(proto_filename = proto_Filename)
 
-# ================== 自動替換 Collision Mesh ==================
-# 利用您的 parser 遍歷樹狀結構，找到 boundingObject
+# ================== 自動替換 Collision Mesh (修正版) ==================
 print("--- 開始替換物理碰撞模型 ---")
-# 1. 搜尋所有 boundingObject
+
+# 1. [建立對照表] 找出所有視覺模型的 DEF 名稱對應的 STL 路徑
+#    例如: { "Base": "package:/.../Base.STL", "L_Motor": "..." }
+geometry_nodes = proto_bot.search("geometry")
+def_map = {}
+
+for geo in geometry_nodes:
+    # 檢查這個 geometry 是否有定義 DEF (例如: "DEF Base Mesh")
+    if geo.DEF and "DEF" in geo.DEF:
+        # 解析 DEF 字串，取出名字 (例如 "Base")
+        parts = geo.DEF.split()
+        if len(parts) >= 2:
+            def_name = parts[1] # 取得中間的名字
+            
+            # 找出裡面的 url
+            url_props = geo.search("url")
+            if url_props:
+                # 儲存到對照表
+                def_map[def_name] = url_props[0].content
+                # print(f"Found visual def: {def_name} -> {def_map[def_name]}")
+
+# 2. [執行替換] 找出 boundingObject 並替換掉 USE 引用
 bounding_objects = proto_bot.search("boundingObject")
 
 for bo in bounding_objects:
-    # 2. 在 boundingObject 裡面找 Mesh 節點
-    meshes = bo.search("Mesh")
-    for mesh_node in meshes:
-        # 3. 找到 Mesh 裡面的 url 屬性
-        url_props = mesh_node.search("url")
-        if url_props:
-            url_prop = url_props[0] # 取得 url property 物件
-            original_url = url_prop.content
+    # 狀況 A: boundingObject 是一個 property (例如: boundingObject USE Base)
+    if isinstance(bo, proto.property):
+        if "USE" in bo.content:
+            # 取出被引用的名稱 (例如 "Base")
+            used_def_name = bo.content.replace("USE", "").strip()
             
-            # 檢查字串中是否包含 .stl (且不是已經替換過的)
-            if ".stl" in original_url and "_collision.stl" not in original_url:
-                # 嘗試建構 collision 檔名
-                collision_url = original_url.replace(".stl", "_collision.stl")
+            # 如果這個名稱在我們的對照表裡，代表它是引用視覺模型
+            if used_def_name in def_map:
+                original_url = def_map[used_def_name]
                 
-                # 這裡做個簡單檢查：雖然我們剛才生成了檔案，但要確保 URL 路徑對應
-                # 簡單作法：直接替換字串，因為我們確定檔案一定在 stl_tool 步驟生成了
-                url_prop.content = collision_url
-                print(f"Updated Collision: {os.path.basename(original_url)} -> {os.path.basename(collision_url)}")
+                # 產生 collision 檔名 (不分大小寫替換)
+                # 注意：您的原始檔是大寫 .STL，工具產生的可能是小寫 .stl，這裡做個兼容
+                collision_url = original_url.replace(".STL", "_collision.STL")
+                
+                # 建構一個全新的 Mesh Node 來取代原本的 USE property
+                # 目標結構: 
+                # boundingObject Mesh {
+                #   url "..."
+                # }
+                
+                # 建立 Node: name="boundingObject", DEF="Mesh" (這樣會印出 "boundingObject Mesh {")
+                new_node = proto.Node(name="boundingObject", parent=bo.parent, DEF="Mesh {", stage=bo.stage)
+                
+                # 建立 url property
+                # 注意：這裡加上引號 " "
+                if not collision_url.startswith('"'):
+                    collision_url = f'"{collision_url}"'
+                    
+                new_url_prop = proto.property(name="url", parent=new_node, content=collision_url, stage=bo.stage + 1)
+                new_node.add_child(new_url_prop)
+                
+                # 關鍵步驟：在父節點的 children 列表中，把舊的 property 換成新的 Node
+                parent_node = bo.parent
+                if bo in parent_node.children:
+                    idx = parent_node.children.index(bo)
+                    parent_node.children[idx] = new_node
+                    print(f"  [成功] 替換 USE {used_def_name} -> 使用獨立 collision 檔")
+
+    # 狀況 B: boundingObject 本身已經是 Node (直接定義 Mesh)
+    elif isinstance(bo, proto.Node):
+        # 這是您原本邏輯適用的情況，保留以防萬一
+        url_props = bo.search("url")
+        if url_props:
+            url_prop = url_props[0]
+            original_url = url_prop.content
+            if "_collision" not in original_url and (".stl" in original_url.lower()):
+                 new_url = original_url.replace(".STL", "_collision.STL")
+                 url_prop.content = new_url
+                 print(f"  [成功] 更新 Mesh URL: {os.path.basename(original_url)} -> collision")
+
+# ================== 結束替換 ==================
+print("--- 碰撞模型替換完成 ---")
 
 # ================== Solid Reference ==================
 l = proto_bot.search("endPoint")

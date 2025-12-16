@@ -2,13 +2,13 @@ import open3d as o3d
 import os
 import glob
 
-def generate_collision_meshes(mesh_folder, target_faces=500):
+def generate_collision_meshes(mesh_folder, target_faces=300):
     """
     遍歷指定資料夾，將所有 .stl 檔案生成 _collision.stl 版本
     """
     print(f"--- 開始處理網格減面: {mesh_folder} ---")
     # 搜尋所有 stl 檔案
-    search_path = os.path.join(mesh_folder, "**", "*.stl")
+    search_path = os.path.join(mesh_folder, "**", "*.STL")
     files = glob.glob(search_path, recursive=True)
     
     generated_files = []
@@ -18,7 +18,7 @@ def generate_collision_meshes(mesh_folder, target_faces=500):
         if "_collision.stl" in input_path:
             continue
             
-        output_path = input_path.replace(".stl", "_collision.stl")
+        output_path = input_path.replace(".STL", "_collision.STL")
         
         # 如果 collision 檔已經存在，就不重新算，節省時間
         if os.path.exists(output_path):
@@ -45,3 +45,8 @@ def generate_collision_meshes(mesh_folder, target_faces=500):
             print(f"處理 {os.path.basename(input_path)} 時發生錯誤: {e}")
             
     print(f"--- 減面完成，共生成 {len(generated_files)} 個新檔案 ---")
+
+if __name__ == "__main__":
+    # 測試用範例
+    test_folder = r"./Testing_Files/URDF_OUTPUT_1230/New_Leg_2024_1230_V1_Simplified/meshes"
+    generate_collision_meshes(test_folder, target_faces=500)
