@@ -302,13 +302,14 @@ class ProtoEditorUI:
                     self.add_tree_children(parent_id, child.children)
                 continue
             
-            # Special handling: skip endPoint, Shape, and physics nodes but show their children (where applicable)
+            # Special handling: skip endPoint, Shape, physics, jointParameters, Motor, Sensor nodes
             node_name_to_check = getattr(child, 'name', '') if isinstance(child, proto.Node) else ''
-            if node_name_to_check in ['endPoint', 'Shape', 'physics']:
+            if node_name_to_check in ['endPoint', 'Shape', 'physics', 'jointParameters'] or \
+               'Motor' in node_name_to_check or 'Sensor' in node_name_to_check:
                 # Don't display these nodes, but process endPoint's children
                 if node_name_to_check == 'endPoint' and hasattr(child, 'children'):
                     self.add_tree_children(parent_id, child.children)
-                # Shape and physics are hidden entirely (properties shown in inspector)
+                # Others are hidden entirely (properties shown in inspector)
                 continue
             
             # Only insert if should be displayed
@@ -415,19 +416,34 @@ class ProtoEditorUI:
             # Find all property children
             properties = [c for c in obj.children if isinstance(c, proto.property)]
             
-            # Check if this is a Joint and find endpoint properties + Shape + physics
+            # Check if this is a Joint and find all merged properties
             node_name = getattr(obj, 'name', '') or ''
             endpoint_properties = []
             shape_properties = []
             physics_properties = []
+            joint_param_properties = []
+            motor_properties = []
+            sensor_properties = []
             
             if 'Joint' in node_name:
                 endpoint_node = None
-                # Search for Node with name='endPoint'
+                
+                # Extract jointParameters properties
                 for child in obj.children:
-                    if isinstance(child, proto.Node) and getattr(child, 'name', '') == 'endPoint':
+                    if isinstance(child, proto.Node) and 'jointParameters' in getattr(child, 'name', ''):
+                        joint_param_properties = [c for c in child.children if isinstance(c, proto.property)]
+                    # Extract Motor and Sensor from device[] container
+                    elif isinstance(child, proto.container):
+                        for device_node in child.children:
+                            if isinstance(device_node, proto.Node):
+                                device_name = getattr(device_node, 'name', '')
+                                if 'Motor' in device_name:
+                                    motor_properties.extend([c for c in device_node.children if isinstance(c, proto.property)])
+                                elif 'Sensor' in device_name:
+                                    sensor_properties.extend([c for c in device_node.children if isinstance(c, proto.property)])
+                    # Find endPoint node
+                    elif isinstance(child, proto.Node) and getattr(child, 'name', '') == 'endPoint':
                         endpoint_node = child
-                        break
                 
                 if endpoint_node:
                     # Extract all property children from the endpoint Node
@@ -450,7 +466,8 @@ class ProtoEditorUI:
                             # Extract physics properties
                             physics_properties = [c for c in ep_child.children if isinstance(c, proto.property)]
             
-            if properties or endpoint_properties or shape_properties or physics_properties:
+            if properties or endpoint_properties or shape_properties or physics_properties or \
+               joint_param_properties or motor_properties or sensor_properties:
                 props_section = tk.LabelFrame(self.inspector_frame, text="Properties",
                                             bg="#383838", fg="white", font=("Arial", 12, "bold"),
                                             padx=10, pady=10)
@@ -464,13 +481,74 @@ class ProtoEditorUI:
                     self.add_property_field(props_section, row_idx, prop_name, prop, 'content')
                     row_idx += 1
                 
-                # Show endpoint properties with visual separation
-                if endpoint_properties or shape_properties or physics_properties:
+                # Show merged properties with visual separation
+                if endpoint_properties or shape_properties or physics_properties or \
+                   joint_param_properties or motor_properties or sensor_properties:
                     # Add separator label
                     if properties:
                         tk.Label(props_section, text="─" * 40, bg="#383838", fg="#666666",
                                font=("Arial", 10)).grid(row=row_idx, column=0, columnspan=2, pady=5)
                         row_idx += 1
+                    
+                    # Display jointParameters properties with yellow color
+                    if joint_param_properties:
+                        tk.Label(props_section, text="Joint Parameters:", bg="#383838", fg="#ffff00",
+                               font=("Arial", 11, "bold"), anchor="w").grid(row=row_idx, column=0, columnspan=2, sticky="w", pady=3)
+                        row_idx += 1
+                        for prop in joint_param_properties:
+                            prop_name = getattr(prop, 'name', 'unknown')
+                            tk.Label(props_section, text=f"{prop_name}:", bg="#383838", fg="#ffff00",
+                                   anchor="w", font=("Arial", 12)).grid(row=row_idx, column=0, sticky="w", pady=5)
+                            
+                            entry = tk.Entry(props_section, bg="#2b2b2b", fg="#ffff00", insertbackground="white",
+                                           font=("Arial", 12))
+                            value = getattr(prop, 'content', '')
+                            if value is not None:
+                                entry.insert(0, str(value))
+                            entry.grid(row=row_idx, column=1, sticky="ew", pady=5, padx=5)
+                            entry.bind('<FocusOut>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            entry.bind('<Return>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            row_idx += 1
+                    
+                    # Display Motor properties with green color
+                    if motor_properties:
+                        tk.Label(props_section, text="Motor Properties:", bg="#383838", fg="#00ff00",
+                               font=("Arial", 11, "bold"), anchor="w").grid(row=row_idx, column=0, columnspan=2, sticky="w", pady=3)
+                        row_idx += 1
+                        for prop in motor_properties:
+                            prop_name = getattr(prop, 'name', 'unknown')
+                            tk.Label(props_section, text=f"{prop_name}:", bg="#383838", fg="#00ff00",
+                                   anchor="w", font=("Arial", 12)).grid(row=row_idx, column=0, sticky="w", pady=5)
+                            
+                            entry = tk.Entry(props_section, bg="#2b2b2b", fg="#00ff00", insertbackground="white",
+                                           font=("Arial", 12))
+                            value = getattr(prop, 'content', '')
+                            if value is not None:
+                                entry.insert(0, str(value))
+                            entry.grid(row=row_idx, column=1, sticky="ew", pady=5, padx=5)
+                            entry.bind('<FocusOut>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            entry.bind('<Return>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            row_idx += 1
+                    
+                    # Display Sensor properties with pink color
+                    if sensor_properties:
+                        tk.Label(props_section, text="Sensor Properties:", bg="#383838", fg="#ff69b4",
+                               font=("Arial", 11, "bold"), anchor="w").grid(row=row_idx, column=0, columnspan=2, sticky="w", pady=3)
+                        row_idx += 1
+                        for prop in sensor_properties:
+                            prop_name = getattr(prop, 'name', 'unknown')
+                            tk.Label(props_section, text=f"{prop_name}:", bg="#383838", fg="#ff69b4",
+                                   anchor="w", font=("Arial", 12)).grid(row=row_idx, column=0, sticky="w", pady=5)
+                            
+                            entry = tk.Entry(props_section, bg="#2b2b2b", fg="#ff69b4", insertbackground="white",
+                                           font=("Arial", 12))
+                            value = getattr(prop, 'content', '')
+                            if value is not None:
+                                entry.insert(0, str(value))
+                            entry.grid(row=row_idx, column=1, sticky="ew", pady=5, padx=5)
+                            entry.bind('<FocusOut>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            entry.bind('<Return>', lambda e, p=prop, attr='content': self.update_property(p, attr, e.widget.get()))
+                            row_idx += 1
                     
                     # Display endpoint properties with orange color
                     if endpoint_properties:

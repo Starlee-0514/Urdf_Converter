@@ -13,21 +13,31 @@ The Proto Editor UI is a Unity-like graphical interface for editing Webots proto
 - Expandable/collapsible tree nodes for easy navigation
 - Double-click to expand/collapse nodes
 
-### 2. **Property Inspector**
+### 2. **Property Inspector** (Scrollable)
 - **Basic Properties**: Name, DEF, Stage for the selected node
-- **Properties Section**: 
-  - Shows all hidden properties for the selected node
-  - For Joints: displays motor name and endpoint properties with orange color
-  - Editable text fields with real-time updates
+- **Properties Section** (color-coded by source):
+  - **Joint Parameters** (Yellow): axis, anchor
+  - **Motor** (Green): name, maxTorque
+  - **Sensor** (Pink): name, type
+  - **Endpoint** (Orange): rotation, translation, name, boundingObject
+  - **Shape** (Cyan): appearance, url (from geometry)
+  - **Physics** (Magenta): density, mass, centerOfMass
+  - All fields are editable with real-time updates
 - **Children Count**: Shows breakdown of child node types
 - **Raw Editor**: View and edit the raw proto text representation
+- **Scroll Support**: Inspector scrolls vertically for long property lists
 
 ### 3. **Joint-Specific Features**
 - Joint nodes display format: `HingeJoint - MotorName`
-- When selecting a Joint, the inspector automatically shows:
-  - Joint's own properties
-  - Endpoint's Solid properties (rotation, translation, boundingObject) in **orange**
-  - Visual separation between joint and endpoint properties
+- When selecting a Joint, the inspector automatically shows all merged properties:
+  - **Joint Parameters** (Yellow): axis, anchor from jointParameters node
+  - **Motor Properties** (Green): name, maxTorque from RotationalMotor
+  - **Sensor Properties** (Pink): name from PositionSensor
+  - **Endpoint Properties** (Orange): rotation, translation, boundingObject from endPoint Solid
+  - **Shape Properties** (Cyan): appearance, url from Shape and geometry nodes
+  - **Physics Properties** (Magenta): density, mass, centerOfMass from physics node
+- All these nodes are hidden from the tree for a cleaner hierarchy
+- Properties are organized by category with visual separation and color coding
 
 ### 4. **File Operations**
 - **Open**: Load proto files using native file dialogs (Zenity on Linux)
@@ -58,11 +68,22 @@ The Proto Editor UI is a Unity-like graphical interface for editing Webots proto
 │                 │ └───────────────────────────────────┘    │
 │                 │                                           │
 │                 │ ┌─ Properties ────────────────────┐      │
-│                 │ │ jointParameters: [...]          │      │
-│                 │ │ ────────────────────────────    │      │
-│                 │ │ Endpoint Properties:            │      │
-│                 │ │ rotation: [0.0 0.0 1.0 1.86]   │      │
-│                 │ │ translation: [0.08 0.0 0.0]    │      │
+│                 │ │ Joint Parameters: (yellow)      │      │
+│                 │ │   axis: [0.0 0.0 1.0]           │      │
+│                 │ │ Motor Properties: (green)       │      │
+│                 │ │   name: "L_Motor"               │      │
+│                 │ │   maxTorque: 10000              │      │
+│                 │ │ Sensor Properties: (pink)       │      │
+│                 │ │   name: "L_Motor_sensor"        │      │
+│                 │ │ Endpoint Properties: (orange)   │      │
+│                 │ │   rotation: [0.0 0.0 1.0 1.86]  │      │
+│                 │ │   translation: [0.08 0.0 0.0]   │      │
+│                 │ │ Shape Properties: (cyan)        │      │
+│                 │ │   appearance: USE Aluminium     │      │
+│                 │ │   url: "mesh.stl"               │      │
+│                 │ │ Physics Properties: (magenta)   │      │
+│                 │ │   density: -1                   │      │
+│                 │ │   mass: 0.075893                │      │
 │                 │ └───────────────────────────────────┘    │
 │                 │                                           │
 │                 │ ┌─ Raw Editor ──────────────────┐        │
@@ -147,8 +168,20 @@ When you select a HingeJoint node:
 
 ## Color Coding
 
-- **White**: Standard properties and values
-- **Orange (#ffaa00)**: Endpoint properties (shown in Joint inspector)
+### Tree View
+- **White**: Standard node labels
+- **Icons**: 🤖 for Robot nodes, 📦 for other nodes
+
+### Inspector Properties
+The inspector uses color coding to distinguish different property sources:
+
+- **White (#ffffff)**: Joint's own properties
+- **Yellow (#ffff00)**: Joint Parameters (axis, anchor)
+- **Green (#00ff00)**: Motor properties (name, maxTorque)
+- **Pink (#ff69b4)**: Sensor properties (name)
+- **Orange (#ffaa00)**: Endpoint properties (rotation, translation, name, boundingObject)
+- **Cyan (#00ffff)**: Shape properties (appearance, url)
+- **Magenta (#ff00ff)**: Physics properties (density, mass, centerOfMass)
 - **Gray (#aaaaaa)**: Read-only values (e.g., Stage)
 - **Green (#00ff00)**: Raw editor text (proto syntax)
 
@@ -158,16 +191,21 @@ The editor implements Unity-like filtering to show only meaningful objects:
 
 ### Shown in Tree:
 - ✅ Robot nodes
-- ✅ Solid nodes
-- ✅ Joint nodes (with motor name)
-- ✅ Motor/Sensor devices
-- ✅ Shape, Mesh, Appearance nodes
-- ✅ Any node with children
+- ✅ Solid nodes  
+- ✅ Joint nodes (with motor name, e.g., "HingeJoint - L_Motor")
+- ✅ Mesh, Appearance nodes
+- ✅ Nested HingeJoint nodes (from endpoint children)
+- ✅ Any meaningful node with children
 
-### Hidden from Tree (shown in Inspector instead):
+### Hidden from Tree (properties merged into parent Joint inspector):
 - ❌ property objects (rotation, translation, name, etc.)
 - ❌ container objects (children[], device[], endPoint[])
-- ❌ endpoint Solid nodes (merged into parent Joint)
+- ❌ endPoint nodes (children promoted, properties merged)
+- ❌ Shape nodes (properties merged)
+- ❌ physics nodes (properties merged)
+- ❌ jointParameters nodes (properties merged)
+- ❌ Motor nodes (properties merged)
+- ❌ Sensor nodes (properties merged)
 
 This creates a clean hierarchy similar to Unity's scene view, where you see the logical structure rather than implementation details.
 
@@ -211,11 +249,19 @@ Fonts are configured at 12-14pt throughout the UI. If text is still too small, c
 ### Properties Not Showing
 Make sure you're clicking on a node in the tree that has properties. Properties are hidden from the tree but appear in the Inspector when you select their parent node.
 
-### Endpoint Properties Not Visible
-Endpoint properties only appear when:
+### Properties Not Showing in Inspector
+Merged properties (JointParameters, Motor, Sensor, Endpoint, Shape, Physics) only appear when:
 1. You select a Joint node (HingeJoint, SliderJoint, etc.)
-2. The joint has an endpoint Solid child
-3. The endpoint has properties (rotation, translation, etc.)
+2. The joint has the corresponding child nodes (jointParameters, device[], endPoint, etc.)
+3. Those nodes contain properties to display
+
+If you don't see these colored property sections, verify that:
+- You've selected the correct Joint node in the tree
+- The proto file contains these nodes within the Joint
+- The nodes have actual property children
+
+### Inspector Scrolling
+The inspector panel scrolls vertically when content exceeds the visible area. Use your mouse wheel or scrollbar to navigate through all properties.
 
 ## Future Enhancements
 
