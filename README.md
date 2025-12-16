@@ -73,19 +73,39 @@ Urdf_Converter/
 ├── main.py              # Main conversion workflow
 ├── proto_praser.py      # Proto file parser library
 ├── stl_tool.py          # Collision mesh generation utility
+├── proto_editor_ui.py   # Unity-like proto file editor GUI
 ├── requirements.txt     # Python dependencies
 ├── README.md            # This file
 ├── docs/
 │   ├── proto_parser.md  # proto_praser.py documentation
 │   ├── stl_tool.md      # stl_tool.py documentation
-│   └── main_workflow.md # main.py detailed workflow
+│   ├── main_workflow.md # main.py detailed workflow
+│   └── proto_editor.md  # Proto Editor UI documentation
 ```
+
+## Tools
+
+### Proto Editor UI
+
+A Unity-like graphical interface for editing Webots proto files with:
+- Hierarchical tree view (filters out implementation details)
+- Property inspector with editable fields
+- Joint-specific features: displays motor names and endpoint properties
+- Native Linux file dialogs with proper DPI support
+
+**Launch the editor:**
+```bash
+python proto_editor_ui.py
+```
+
+See **[Proto Editor Documentation](docs/proto_editor.md)** for detailed usage guide.
 
 ## Documentation
 
 - **[Proto Parser Library](docs/proto_parser.md)** - Explains the custom proto file parsing system
 - **[STL Tool Library](docs/stl_tool.md)** - Details on collision mesh generation
 - **[Main Workflow](docs/main_workflow.md)** - Step-by-step breakdown of the conversion process
+- **[Proto Editor UI](docs/proto_editor.md)** - Unity-like GUI editor for proto files
 
 ## Example
 
