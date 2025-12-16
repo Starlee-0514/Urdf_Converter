@@ -3,3 +3,5 @@ output
 Folder_Object.json
 __pycache__
 venv
+Testing_Files
+activate.bat
