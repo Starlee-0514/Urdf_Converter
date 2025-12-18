@@ -151,8 +151,13 @@ for bo in bounding_objects:
                 original_url = def_map[used_def_name]
                 
                 # 產生 collision 檔名 (不分大小寫替換)
-                # 注意：您的原始檔是大寫 .STL，工具產生的可能是小寫 .stl，這裡做個兼容
-                collision_url = original_url.replace(".STL", "_collision.STL")
+                # 保持原始檔案的大小寫格式
+                if ".STL" in original_url:
+                    collision_url = original_url.replace(".STL", "_collision.STL")
+                elif ".stl" in original_url:
+                    collision_url = original_url.replace(".stl", "_collision.stl")
+                else:  # .Stl or other variations
+                    collision_url = original_url[:-4] + "_collision" + original_url[-4:]
                 
                 # 建構一個全新的 Mesh Node 來取代原本的 USE property
                 # 目標結構: 
@@ -185,8 +190,14 @@ for bo in bounding_objects:
         if url_props:
             url_prop = url_props[0]
             original_url = url_prop.content
-            if "_collision" not in original_url and (".stl" in original_url.lower()):
-                 new_url = original_url.replace(".STL", "_collision.STL")
+            if "_collision" not in original_url.lower() and (".stl" in original_url.lower()):
+                 # 保持原始檔案的大小寫格式
+                 if ".STL" in original_url:
+                     new_url = original_url.replace(".STL", "_collision.STL")
+                 elif ".stl" in original_url:
+                     new_url = original_url.replace(".stl", "_collision.stl")
+                 else:  # .Stl or other variations
+                     new_url = original_url[:-4] + "_collision" + original_url[-4:]
                  url_prop.content = new_url
                  print(f"  [成功] 更新 Mesh URL: {os.path.basename(original_url)} -> collision")
 

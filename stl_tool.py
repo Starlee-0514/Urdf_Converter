@@ -7,22 +7,30 @@ def generate_collision_meshes(mesh_folder, target_faces=300):
     遍歷指定資料夾，將所有 .stl 檔案生成 _collision.stl 版本
     """
     print(f"--- 開始處理網格減面: {mesh_folder} ---")
-    # 搜尋所有 stl 檔案
-    search_path = os.path.join(mesh_folder, "**", "*.STL")
-    files = glob.glob(search_path, recursive=True)
+    # 搜尋所有 stl 檔案 (不分大小寫)
+    files = []
+    for ext in ["*.stl", "*.STL", "*.Stl"]:
+        search_path = os.path.join(mesh_folder, "**", ext)
+        files.extend(glob.glob(search_path, recursive=True))
     
     generated_files = []
 
     for input_path in files:
-        # 跳過已經是 collision 的檔案
-        if "_collision.stl" in input_path:
+        # 跳過已經是 collision 的檔案 (不分大小寫)
+        if "_collision" in input_path.lower():
             continue
-            
-        output_path = input_path.replace(".STL", "_collision.STL")
         
-        # 如果 collision 檔已經存在，就不重新算，節省時間
-        if os.path.exists(output_path):
-            continue
+        # 根據原始檔案的擴展名，生成相同大小寫的 collision 檔名
+        if input_path.endswith(".STL"):
+            output_path = input_path.replace(".STL", "_collision.STL")
+        elif input_path.endswith(".stl"):
+            output_path = input_path.replace(".stl", "_collision.stl")
+        else:  # .Stl or other variations
+            output_path = input_path[:-4] + "_collision" + input_path[-4:]
+        
+        # # 如果 collision 檔已經存在，就不重新算，節省時間
+        # if os.path.exists(output_path):
+        #     continue
 
         try:
             # 1. 讀取
@@ -48,5 +56,5 @@ def generate_collision_meshes(mesh_folder, target_faces=300):
 
 if __name__ == "__main__":
     # 測試用範例
-    test_folder = r"./Testing_Files/URDF_OUTPUT_1230/New_Leg_2024_1230_V1_Simplified/meshes"
-    generate_collision_meshes(test_folder, target_faces=500)
+    test_folder = r"/home/starlee/dev/ros2_ws/src/corgi_ros_control/protos/meshes_CorgiRobot"
+    generate_collision_meshes(test_folder, target_faces=100)
