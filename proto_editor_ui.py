@@ -9,6 +9,7 @@ from tkinter import ttk, filedialog, messagebox, Menu
 import proto_praser as proto
 import os
 import subprocess
+import stl_tool
 
 class ProtoEditorUI:
     def __init__(self, root):
@@ -827,42 +828,77 @@ class ProtoEditorUI:
         if not self.proto_robot:
             messagebox.showwarning("Warning", "No proto file loaded")
             return
-            
-        meshes = self.proto_robot.search("Mesh")
+        
+        # Find all nodes that have "Mesh" in their DEF
+        meshes = []
+        def find_meshes(node):
+            if hasattr(node, 'DEF') and node.DEF and 'Mesh' in node.DEF:
+                meshes.append(node)
+            if hasattr(node, 'children'):
+                for child in node.children:
+                    find_meshes(child)
+        
+        find_meshes(self.proto_robot)
         
         result_window = tk.Toplevel(self.root)
         result_window.title(f"Meshes Found: {len(meshes)}")
-        result_window.geometry("600x400")
+        result_window.geometry("800x400")
         
-        # Listbox with scrollbar
+        # Text widget with scrollbar for better formatting
         frame = tk.Frame(result_window)
         frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         
         scrollbar = ttk.Scrollbar(frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set)
-        listbox.pack(fill=tk.BOTH, expand=True)
-        scrollbar.config(command=listbox.yview)
+        text_widget = tk.Text(frame, yscrollcommand=scrollbar.set, font=("Courier", 10))
+        text_widget.pack(fill=tk.BOTH, expand=True)
+        scrollbar.config(command=text_widget.yview)
         
-        for mesh in meshes:
+        for i, mesh in enumerate(meshes, 1):
+            # Get DEF name
+            def_name = mesh.DEF.replace("{", "").strip() if mesh.DEF else "(unnamed)"
+            text_widget.insert(tk.END, f"{i}. {def_name}\n")
+            
+            # Get URL
             urls = mesh.search("url")
             if urls:
-                listbox.insert(tk.END, urls[0].content)
+                url = urls[0].content.strip('"')
+                text_widget.insert(tk.END, f"   URL: {url}\n")
             else:
-                listbox.insert(tk.END, "(no url)")
+                text_widget.insert(tk.END, "   URL: (no url)\n")
+            text_widget.insert(tk.END, "\n")
+        
+        text_widget.config(state=tk.DISABLED)
                 
     def find_all_motors(self):
         """Find and list all motor nodes"""
         if not self.proto_robot:
             messagebox.showwarning("Warning", "No proto file loaded")
             return
-            
-        motors = self.proto_robot.search("RotationalMotor")
+        
+        # Use both methods to find motors:
+        # 1. Search by name (for nodes like: name="RotationalMotor", DEF="{")
+        motors_by_name = self.proto_robot.search("RotationalMotor")
+        motors_by_name.extend(self.proto_robot.search("LinearMotor"))
+        
+        # 2. Find nodes that have "Motor" in their DEF (for nodes like: name="device", DEF="RotationalMotor {")
+        motors_by_def = []
+        def find_motors(node):
+            if hasattr(node, 'DEF') and node.DEF and 'Motor' in node.DEF and '{' in node.DEF:
+                motors_by_def.append(node)
+            if hasattr(node, 'children'):
+                for child in node.children:
+                    find_motors(child)
+        
+        find_motors(self.proto_robot)
+        
+        # Combine and remove duplicates
+        motors = list({id(m): m for m in motors_by_name + motors_by_def}.values())
         
         result_window = tk.Toplevel(self.root)
         result_window.title(f"Motors Found: {len(motors)}")
-        result_window.geometry("600x400")
+        result_window.geometry("800x400")
         
         # Create text widget with scrollbar
         frame = tk.Frame(result_window)
@@ -871,24 +907,89 @@ class ProtoEditorUI:
         scrollbar = ttk.Scrollbar(frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        text_widget = tk.Text(frame, yscrollcommand=scrollbar.set)
+        text_widget = tk.Text(frame, yscrollcommand=scrollbar.set, font=("Courier", 10))
         text_widget.pack(fill=tk.BOTH, expand=True)
         scrollbar.config(command=text_widget.yview)
         
-        for i, motor in enumerate(motors):
-            text_widget.insert(tk.END, f"Motor {i+1}:\n")
+        for i, motor in enumerate(motors, 1):
+            # Get motor type from DEF
+            motor_type = motor.DEF.replace("{", "").strip() if motor.DEF else "Motor"
+            
+            # Get motor name
+            names = motor.search("name")
+            motor_name = names[0].content.strip('"') if names else "(unnamed)"
+            
+            text_widget.insert(tk.END, f"{i}. {motor_type}: {motor_name}\n")
+            
+            # Get maxTorque
             torques = motor.search("maxTorque")
             if torques:
-                text_widget.insert(tk.END, f"  maxTorque: {torques[0].content}\n")
+                text_widget.insert(tk.END, f"   maxTorque: {torques[0].content}\n")
+            
+            # Get minPosition and maxPosition if available
+            min_pos = motor.search("minPosition")
+            max_pos = motor.search("maxPosition")
+            if min_pos:
+                text_widget.insert(tk.END, f"   minPosition: {min_pos[0].content}\n")
+            if max_pos:
+                text_widget.insert(tk.END, f"   maxPosition: {max_pos[0].content}\n")
+            
             text_widget.insert(tk.END, "\n")
+        
+        text_widget.config(state=tk.DISABLED)
             
     def batch_replace_collision(self):
-        """Batch replace visual meshes with collision meshes"""
+        """Batch replace visual meshes with collision meshes (generates if needed)"""
         if not self.proto_robot:
             messagebox.showwarning("Warning", "No proto file loaded")
             return
-            
-        count = 0
+        
+        if not self.current_file:
+            messagebox.showwarning("Warning", "No proto file path available")
+            return
+        
+        # Get the directory of the current proto file
+        proto_dir = os.path.dirname(self.current_file)
+        
+        # Find all mesh folders (look for folders named 'meshes' or containing STL files)
+        mesh_folders = set()
+        
+        # Search for geometry nodes to find mesh paths
+        geometry_nodes = []
+        def find_geometry(node):
+            if hasattr(node, 'name') and node.name == 'geometry':
+                geometry_nodes.append(node)
+            if hasattr(node, 'children'):
+                for child in node.children:
+                    find_geometry(child)
+        
+        find_geometry(self.proto_robot)
+        
+        # Extract mesh folder paths from URLs
+        for geo in geometry_nodes:
+            url_props = geo.search("url")
+            if url_props:
+                url = url_props[0].content.strip('"')
+                if url.startswith("./"):
+                    mesh_path = os.path.join(proto_dir, url[2:])
+                elif not os.path.isabs(url):
+                    mesh_path = os.path.join(proto_dir, url)
+                else:
+                    mesh_path = url
+                
+                if os.path.exists(mesh_path):
+                    mesh_dir = os.path.dirname(mesh_path)
+                    # Add the mesh directory and check parent folders
+                    mesh_folders.add(mesh_dir)
+                    # Also check if there's a parent "meshes" folder
+                    parent = os.path.dirname(mesh_dir)
+                    if os.path.basename(parent).lower() == 'meshes' or 'meshes' in parent.lower():
+                        mesh_folders.add(parent)
+        
+        # Collect meshes that need replacement
+        meshes_to_replace = []
+        missing_collision_files = []
+        
         bounding_objects = self.proto_robot.search("boundingObject")
         
         for bo in bounding_objects:
@@ -897,13 +998,84 @@ class ProtoEditorUI:
                 url_props = mesh_node.search("url")
                 if url_props:
                     url_prop = url_props[0]
-                    original_url = url_prop.content
+                    original_url = url_prop.content.strip('"')
                     
-                    if ".stl" in original_url and "_collision.stl" not in original_url:
-                        collision_url = original_url.replace(".stl", "_collision.stl")
-                        url_prop.content = collision_url
-                        count += 1
+                    if ".stl" in original_url.lower() and "_collision" not in original_url.lower():
+                        # Convert relative path to absolute
+                        if original_url.startswith("./"):
+                            mesh_file = os.path.join(proto_dir, original_url[2:])
+                        elif not os.path.isabs(original_url):
+                            mesh_file = os.path.join(proto_dir, original_url)
+                        else:
+                            mesh_file = original_url
                         
+                        # Generate collision file path
+                        if ".STL" in original_url:
+                            collision_url = original_url.replace(".STL", "_collision.STL")
+                        elif ".stl" in original_url:
+                            collision_url = original_url.replace(".stl", "_collision.stl")
+                        else:
+                            collision_url = original_url[:-4] + "_collision" + original_url[-4:]
+                        
+                        if collision_url.startswith("./"):
+                            collision_file = os.path.join(proto_dir, collision_url[2:])
+                        elif not os.path.isabs(collision_url):
+                            collision_file = os.path.join(proto_dir, collision_url)
+                        else:
+                            collision_file = collision_url
+                        
+                        # Check if collision file exists
+                        if not os.path.exists(collision_file):
+                            if os.path.exists(mesh_file):
+                                missing_collision_files.append(mesh_file)
+                            else:
+                                # Original file doesn't exist, skip
+                                continue
+                        
+                        meshes_to_replace.append((url_prop, original_url, collision_url))
+        
+        # Generate missing collision meshes
+        if missing_collision_files:
+            response = messagebox.askyesno(
+                "Generate Collision Meshes",
+                f"Found {len(missing_collision_files)} meshes without collision variants.\n\n"
+                "Generate simplified collision meshes now?\n"
+                "(Will search recursively in mesh folders)\n"
+                "(This may take some time)",
+                icon='question'
+            )
+            
+            if response:
+                self.status_bar.config(text="Generating collision meshes...")
+                self.root.update()
+                
+                try:
+                    # If no mesh folders found, use the directory of the proto file
+                    if not mesh_folders:
+                        mesh_folders.add(proto_dir)
+                    
+                    # Generate collision meshes in all mesh folders (recursive search)
+                    for mesh_folder in mesh_folders:
+                        if os.path.exists(mesh_folder):
+                            print(f"Processing mesh folder: {mesh_folder}")
+                            stl_tool.generate_collision_meshes(mesh_folder, target_faces=500)
+                    
+                    messagebox.showinfo("Success", 
+                        f"Generated collision meshes\n"
+                        f"Processed {len(mesh_folders)} directories")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to generate collision meshes:\n{str(e)}")
+                    return
+        
+        # Replace URLs
+        count = 0
+        for url_prop, original_url, collision_url in meshes_to_replace:
+            # Add quotes if needed
+            if not collision_url.startswith('"'):
+                collision_url = f'"{collision_url}"'
+            url_prop.content = collision_url
+            count += 1
+        
         self.modified = True
         self.populate_tree()
         self.status_bar.config(text=f"Replaced {count} meshes with collision variants")
