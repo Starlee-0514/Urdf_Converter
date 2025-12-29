@@ -79,7 +79,7 @@ try:
     shutil.copytree(texture_path, os.path.join(output_path, "textures_"+folder_name))
     
     # NEW: 在複製完檔案後，立刻對目標資料夾執行減面
-    stl_tool.generate_collision_meshes(target_mesh_dir, target_faces=500)
+    stl_tool.generate_collision_meshes(target_mesh_dir, target_faces=200)
 except Exception as e:
     print(e)
 
@@ -232,7 +232,7 @@ for i in l:
         else:
             name_object = None
         
-        if name_object and "Ref" not in name_object:
+        if name_object and ("Ref" not in name_object):
             # print
             i.DEF = "SolidReference {"
             i.children = []
