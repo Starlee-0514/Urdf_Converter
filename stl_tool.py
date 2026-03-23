@@ -1,6 +1,7 @@
 import open3d as o3d
 import os
 import glob
+from ui_picker import zenity_select_folder
 
 def generate_collision_meshes(mesh_folder, target_faces=300):
     """
@@ -56,5 +57,6 @@ def generate_collision_meshes(mesh_folder, target_faces=300):
 
 if __name__ == "__main__":
     # 測試用範例
-    test_folder = r"/home/starlee/dev/ros2_ws/src/corgi_ros_control/protos/meshes_CorgiRobot"
-    generate_collision_meshes(test_folder, target_faces=100)
+    # test_folder = r"/home/starlee/dev/ros2_ws/src/corgi_ros_control/protos/meshes_CorgiRobot"
+    test_folder = zenity_select_folder()
+    generate_collision_meshes(test_folder, target_faces=500)

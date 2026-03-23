@@ -1,3 +1,4 @@
+# main.py
 from urdf2webots.importer import convertUrdfFile
 import os
 import json
@@ -5,23 +6,8 @@ import shutil
 import subprocess
 import proto_praser as proto
 import stl_tool
-
-def zenity_select_folder(title="Select Folder"):
-    """Use Zenity to select a folder"""
-    try:
-        result = subprocess.run(
-            ['zenity', '--file-selection', '--directory', '--title', title],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError:
-        print("Selection cancelled")
-        return None
-    except FileNotFoundError:
-        print("Zenity not found. Please install: sudo apt-get install zenity")
-        return None
+import convert_collision_to_ifs
+from ui_picker import zenity_select_folder, zenity_select_file, zenity_select_path, zenity_select_multiple_files, zenity_select_multiple_folders
 
 Folder_Object = {'Dir': {}, 'File': []}
     
@@ -254,3 +240,7 @@ for i in l:
 
 # save the proto file
 proto_bot.save_robot(proto_Filename)
+
+# 在儲存後，建立副本並將所有 STL Mesh 轉為 IndexedFaceSet
+copy_proto_file = convert_collision_to_ifs.process_proto_file(proto_Filename)
+print(f"--- IFS 轉換完成，輸出副本: {copy_proto_file} ---")

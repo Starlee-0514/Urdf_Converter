@@ -5,3 +5,6 @@ __pycache__
 venv
 Testing_Files
 activate.bat
+
+Webots_docs
+.vscode
