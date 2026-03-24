@@ -1,0 +1,8 @@
+{
+  "venvPath": "/home/starlee/envs",
+  "venv": "Webots_Proto_Importer",
+  "extraPaths": [
+    "/opt/ros/jazzy/lib/python3.12/site-packages",
+    "/home/starlee/envs/Webots_Proto_Importer/lib/python3.10/site-packages"
+  ]
+}

@@ -2,7 +2,7 @@ import re
 import os
 import trimesh
 import sys
-import proto_praser as proto
+from urdf_converter.core import proto_parser as proto
 
 def stl_to_ifs_str(stl_path, indent_level=6):
     """
@@ -138,7 +138,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         target_proto = sys.argv[1]
     else:
-        from ui_picker import zenity_select_file    
+        from urdf_converter.ui.ui_picker import zenity_select_file    
         # 透過 Zenity 選擇 PROTO 檔案
         target_proto = zenity_select_file("Select PROTO File")
         

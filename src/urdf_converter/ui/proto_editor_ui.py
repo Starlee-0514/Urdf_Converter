@@ -6,10 +6,10 @@ A hierarchical editor for Webots proto files with tree view and property inspect
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, Menu
-import proto_praser as proto
+from urdf_converter.core import proto_parser as proto
 import os
 import subprocess
-import stl_tool
+from urdf_converter.utils import stl_tool
 
 class ProtoEditorUI:
     def __init__(self, root):

@@ -1,7 +1,7 @@
 import open3d as o3d
 import os
 import glob
-from ui_picker import zenity_select_folder
+from urdf_converter.ui.ui_picker import zenity_select_folder
 
 def generate_collision_meshes(mesh_folder, target_faces=300):
     """

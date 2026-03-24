@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "urdf-converter"
+version = "0.1.0"
+authors = [
+  { name="starlee" },
+]
+description = "A sophisticated tool to convert URDF files to Webots PROTO format with UI support."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "urdf2webots",
+    "open3d",
+    "trimesh",
+    "numpy",
+]
+
+[project.scripts]
+urdf-converter = "urdf_converter.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

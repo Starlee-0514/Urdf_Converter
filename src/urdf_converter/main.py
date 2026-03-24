@@ -4,10 +4,10 @@ import os
 import json
 import shutil
 import subprocess
-import proto_praser as proto
-import stl_tool
-import convert_collision_to_ifs
-from ui_picker import zenity_select_folder, zenity_select_file, zenity_select_path, zenity_select_multiple_files, zenity_select_multiple_folders
+from urdf_converter.core import proto_parser as proto
+from urdf_converter.utils import stl_tool
+from urdf_converter.core import convert_collision_to_ifs
+from urdf_converter.ui.ui_picker import zenity_select_folder, zenity_select_file, zenity_select_path, zenity_select_multiple_files, zenity_select_multiple_folders
 
 Folder_Object = {'Dir': {}, 'File': []}
     
